@@ -17,6 +17,7 @@ Spusť aktualizaci systému:
 Bash
 
 sudo apt update && sudo apt full-upgrade -y
+
 Nainstaluj pip a python-venv pro správu balíčků a virtuálních prostředí:
 
 Bash
