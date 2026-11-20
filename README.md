@@ -1,84 +1,30 @@
-# Speedtest
-### Projekt pro měření rychlosti internetu a ukládání do Google Sheet
+# SpeedTestDoma
 
-> **Stav 2026-11-20 (produkce):** Měření běží na Raspberry Pi (Debian 13 arm64, Kingston SSD) z `/srv/speedtest`, automaticky výhradně přes oficiální Ookla CLI proti serveru O2 Praha (ID 30620), cron `0,30 * * * *`. Původní Python knihovna a Quantcom probe jsou z automatického běhu vyřazené. Detaily, oprava převodu bajty/Mbit a rollback: [docs/MIGRATION-2026-11-20.md](docs/MIGRATION-2026-11-20.md).
+Skript pro měření rychlosti internetu a ukládání výsledků do Google Sheet.
 
-## Jak spustit
-1. Nainstalujte závislosti: `pip install -r requirements.txt`
-2. Konfigurujte soubor `config/config.json`
-3. Spusťte skript: `python3 src/main.py`
+## Kód
 
-README: Nasazení skriptu SpeedTest na Raspberry Pi
-Tento dokument obsahuje veškeré kroky potřebné pro nasazení a spuštění skriptu pro automatické měření rychlosti internetu a ukládání výsledků do Google Sheetu.
+`src/speedtestdoma.py` — jeden soubor, čtyři části:
 
-1. Příprava systému a instalace Pythonu
-Nejprve se ujisti, že máš nainstalovaný Raspberry Pi OS (64-bit). 64bitová verze je doporučená pro lepší výkon.
+- **Setup (při importu):** logování do stdout; gspread + `oauth2client` servisní účet, cesta ke JSON klíči z env `GOOGLE_KEY_FILE` (výchozí `/home/pi/Speedtest/config/authgoogle.json`), scopes pro Sheets + Drive. Autentizace selže ⇒ skript skončí s chybou.
+- **`get_or_create_worksheet()`:** otevře spreadsheet `SpeedTestDoma` a list pojmenovaný podle aktuálního měsíce `YYYY-MM`. Když list neexistuje, vytvoří ho (5 sloupců) a zapíše hlavičky `Timestamp, Ping, Download, Upload, Server`.
+- **`run_speedtest()`:** Python knihovna `speedtest` (speedtest-cli): `get_best_server()` (nejmenší ping), `download()`, `upload()`. Z `results.dict()` vydá ping a rychlosti v Mbit/s (dělení `1e6`) a popis serveru `sponsor (name, country)`. Při výjimce vrátí samé `None`.
+- **`main()`:** získá list → změří → připojí řádek `[timestamp, ping, download, upload, server]` přes `append_row`. Selhání měření i zápisu se jen loguje, řádek se nevloží.
 
-Spusť aktualizaci systému:
+## Závislosti
 
+`speedtest-cli`, `gspread`, `oauth2client` (v repozitáři je `requirements.txt` prázdný).
 
-`sudo apt update && sudo apt full-upgrade -y`
+## Spuštění
 
-Nainstaluj pip a python-venv pro správu balíčků a virtuálních prostředí:
+```sh
+python3 -m venv venv
+venv/bin/pip install speedtest-cli gspread oauth2client
+GOOGLE_KEY_FILE=/cesta/authgoogle.json venv/bin/python3 src/speedtestdoma.py
+```
 
+Servisní účet z JSON musí mít na listu oprávnění Editor. `authgoogle.json` nepatží do repozitáře (mimo jiné proto `config/` v repozitáři chybí).
 
-`sudo apt install python3-pip python3-venv -y`
-2. Klonování projektu a příprava prostředí
-Naklonuj projekt z repozitáře a vytvoř virtuální prostředí.
+## Produkce
 
-Přejdi do domovského adresáře:
-
-
-`cd ~`
-Naklonuj projekt ze svého repozitáře (předpokládáme, že tam je, pokud ne, vytvoř ho ručně):
-
-`git clone https://github.com/tve-uzivatelske-jmeno/tvuj-projekt.git Speedtest`
-`cd Speedtest`
-Vytvoř a aktivuj virtuální prostředí:
-
-`python3 -m venv venv
-source venv/bin/activate`
-Nainstaluj všechny potřebné balíčky.
-
-`pip install gspread==5.10.0 speedtest-cli oauth2client`
-(Poznámka: Používáme gspread==5.10.0 kvůli kompatibilitě s Pythonem 3.7 na RPi OS Lite 32-bit).
-
-3. Konfigurace Google Sheets
-Pro komunikaci s Google Sheets je potřeba servisní účet.
-
-Vytvoř servisní účet v Google Cloud Console. Vygeneruj a stáhni klíč ve formátu JSON.
-
-Pojmenuj soubor authgoogle.json a ulož ho do adresáře /home/pi/Speedtest/config/.
-
-Oprávnění ke Google Sheetu: Otevři Google Sheet, kam se data ukládají, a sdílej ho se servisním účtem (e-mailová adresa je v JSON souboru, např. muj-ucet@projekt-1234.iam.gserviceaccount.com). Uděl mu oprávnění "Editor".
-
-4. Automatizace spouštění (Cron Job)
-Skript musí běžet automaticky. Nejlepší volbou je cron.
-
-Otevři editor crontabu:
-
-`crontab -e`
-Přidej následující řádek pro spouštění skriptu každou 7. minutu v hodině:
-
-`7 * * * * /home/pi/Speedtest/venv/bin/python3 /home/pi/Speedtest/main.py >> /home/pi/logs/speedtest.log 2>&1`
-(Poznámka: Uprav cesty, pokud se tvůj projekt nachází jinde.)
-
-Upozornění na logování: Pro správné logování je potřeba vytvořit adresář a nastavit oprávnění:
-
-`mkdir -p /home/pi/logs`
-Tím se zajistí, že cron job bude mít oprávnění k zápisu logů.
-
-5. Ověření funkčnosti
-Spusť skript ručně a zkontroluj, zda se data objeví v Google Sheetu a v logu.
-
-Spusť skript s Pythonem z virtuálního prostředí:
-
-Bash
-
-`/home/pi/Speedtest/venv/bin/python3 /home/pi/Speedtest/main.py`
-Zkontroluj log:
-
-Bash
-
-`cat /home/pi/logs/speedtest.log`
-Pokud jsou výsledky v Google Sheetu i v logu, je vše připraveno.
+Produkční běžec je přepsaná varianta používající oficiální Ookla CLI, nasazená na Raspberry Pi v `/srv/speedtest` (cron `0,30 * * * *`); její stav, jednotkový převod a rollback popisuje [docs/MIGRATION-2026-11-20.md](docs/MIGRATION-2026-11-20.md).
