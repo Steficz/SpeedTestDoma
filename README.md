@@ -1,6 +1,8 @@
 # Speedtest
 ### Projekt pro měření rychlosti internetu a ukládání do Google Sheet
 
+> **Stav 2026-11-20 (produkce):** Měření běží na Raspberry Pi (Debian 13 arm64, Kingston SSD) z `/srv/speedtest`, automaticky výhradně přes oficiální Ookla CLI proti serveru O2 Praha (ID 30620), cron `0,30 * * * *`. Původní Python knihovna a Quantcom probe jsou z automatického běhu vyřazené. Detaily, oprava převodu bajty/Mbit a rollback: [docs/MIGRATION-2026-11-20.md](docs/MIGRATION-2026-11-20.md).
+
 ## Jak spustit
 1. Nainstalujte závislosti: `pip install -r requirements.txt`
 2. Konfigurujte soubor `config/config.json`
